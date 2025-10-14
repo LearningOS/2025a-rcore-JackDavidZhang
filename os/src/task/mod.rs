@@ -54,7 +54,7 @@ lazy_static! {
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
-            trace: [0;512]
+            trace: [0;5]
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
@@ -183,10 +183,26 @@ pub fn exit_current_and_run_next() {
 
 /// Get system call trace
 pub fn get_syscall_trace(id:usize) -> usize{
-    TASK_MANAGER.get_syscall_trace(id)
+    let index = match id{
+       64 => 0,
+       93 => 1,
+       124 => 2,
+       169 => 3,
+       410 => 4,
+       _ => panic!("Unsupported syscall_id: {}",id)
+    };
+    TASK_MANAGER.get_syscall_trace(index)
 }
 
 /// Count system call trace
 pub fn count_syscall_trace(id:usize){
-    TASK_MANAGER.count_syscall_trace(id);
+    let index = match id{
+       64 => 0,
+       93 => 1,
+       124 => 2,
+       169 => 3,
+       410 => 4,
+       _ => panic!("Unsupported syscall_id: {}",id)
+    };
+    TASK_MANAGER.count_syscall_trace(index);
 }

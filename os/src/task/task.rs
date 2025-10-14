@@ -10,7 +10,7 @@ pub struct TaskControlBlock {
     /// The task context
     pub task_cx: TaskContext,
     /// The trace count
-    pub trace: [usize;512]
+    pub trace: [usize;5]
 }
 
 /// The status of a task
