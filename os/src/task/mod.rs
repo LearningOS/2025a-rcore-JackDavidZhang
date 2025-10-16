@@ -153,6 +153,16 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
+    fn get_syscall_trace(&self,id:usize) -> usize{
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].trace[id]
+    }
+    fn count_syscall_trace(&self,id:usize){
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].trace[id]+=1;
+    }
 }
 
 /// Run the first task in task list.
@@ -201,4 +211,36 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+
+/// Get system call trace
+pub fn get_syscall_trace(id:usize) -> usize{
+    let index = match id{
+       64 => 0,
+       93 => 1,
+       124 => 2,
+       169 => 3,
+       214 => 4,
+       215 => 5,
+       222 => 6,
+       410 => 7,
+       _ => panic!("Unsupported syscall_id: {}",id)
+    };
+    TASK_MANAGER.get_syscall_trace(index)
+}
+
+/// Count system call trace
+pub fn count_syscall_trace(id:usize){
+    let index = match id{
+       64 => 0,
+       93 => 1,
+       124 => 2,
+       169 => 3,
+       214 => 4,
+       215 => 5,
+       222 => 6,
+       410 => 7,
+       _ => panic!("Unsupported syscall_id: {}",id)
+    };
+    TASK_MANAGER.count_syscall_trace(index);
 }

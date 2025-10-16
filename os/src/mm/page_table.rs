@@ -1,6 +1,6 @@
 //! Implementation of [`PageTableEntry`] and [`PageTable`].
 
-use super::{frame_alloc, FrameTracker, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
+use super::{frame_alloc, FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
@@ -69,6 +69,10 @@ impl PageTableEntry {
     /// The page pointered by page table entry is executable?
     pub fn executable(&self) -> bool {
         (self.flags() & PTEFlags::X) != PTEFlags::empty()
+    }
+    /// The page pointered by page table entry is accessable in user mkode?
+    pub fn user_mode(&self) -> bool {
+        (self.flags() & PTEFlags::U) != PTEFlags::empty()
     }
 }
 
@@ -178,4 +182,38 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
         start = end_va.into();
     }
     v
+}
+
+/// Translate a usize Virtual Address to a usize Physical Address for readonly
+pub fn translated_addressr(token: usize, va: usize) -> Option<usize>{
+    let page_table = PageTable::from_token(token);
+    let virtual_address = VirtAddr::from(va);
+    let vpn = VirtPageNum::from(virtual_address.floor());
+    let ppn = match page_table.translate(vpn) {
+        Some(pte) => if pte.is_valid()&&pte.readable()&&pte.user_mode(){
+            trace!("kernel: find vpn {:#x} to ppn {:#x} flag {:#x}",usize::from(vpn),usize::from(pte.ppn()),pte.flags().bits);
+            pte.ppn()
+        }else{
+            return None
+        },
+        None => return None,
+    };
+    let pa = usize::from(PhysAddr::from(ppn)) + virtual_address.page_offset();
+    Some(usize::from(pa))
+}/// Translate a usize Virtual Address to a usize Physical Address for write
+pub fn translated_addressw(token: usize, va: usize) -> Option<usize>{
+    let page_table = PageTable::from_token(token);
+    let virtual_address = VirtAddr::from(va);
+    let vpn = VirtPageNum::from(virtual_address.floor());
+    let ppn = match page_table.translate(vpn) {
+        Some(pte) => if pte.is_valid()&&pte.writable()&&pte.user_mode(){
+            trace!("kernel: find vpn {:#x} to ppn {:#x} flag {:#x}",usize::from(vpn),usize::from(pte.ppn()),pte.flags().bits);
+            pte.ppn()
+        }else{
+            return None
+        },
+        None => return None,
+    };
+    let pa = usize::from(PhysAddr::from(ppn)) + virtual_address.page_offset();
+    Some(usize::from(pa))
 }
