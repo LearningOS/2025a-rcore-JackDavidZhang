@@ -51,6 +51,36 @@ impl MemorySet {
     pub fn token(&self) -> usize {
         self.page_table.token()
     }
+    /// Check conflicts and push new Maparea
+    pub fn mmap(&mut self, start_va: VirtAddr, end_va: VirtAddr,permission: MapPermission) -> isize{
+        let start_vpn = start_va.floor();
+        let end_vpn = end_va.ceil();
+        for vpn in VPNRange::new(start_vpn, end_vpn){
+            if self.mapped(vpn){
+                return -1;
+            }
+        }
+        let map_area = MapArea::new(start_va, end_va, MapType::Framed, permission);
+        self.push(map_area,None);
+        0
+    }
+    /// Check conflicts and pop Maparea
+    pub fn munmap(&mut self, start_va: VirtAddr, end_va: VirtAddr) -> isize{
+        let start_vpn = start_va.floor();
+        let end_vpn = end_va.ceil();
+        for vpn in VPNRange::new(start_vpn,end_vpn){
+            if !self.mapped(vpn){
+                return -1;
+            }
+            for area in &mut self.areas{
+                if area.mapped(vpn){
+                    area.unmap_one(&mut self.page_table, vpn);
+                    break;
+                }
+            }
+        }
+        0
+    }
     /// Assume that no conflicts.
     pub fn insert_framed_area(
         &mut self,
@@ -62,6 +92,14 @@ impl MemorySet {
             MapArea::new(start_va, end_va, MapType::Framed, permission),
             None,
         );
+    }
+    fn mapped(&self,vpn:VirtPageNum) -> bool{
+        for area in &self.areas {
+            if area.mapped(vpn){
+                return true;
+            }
+        }
+        false
     }
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
         map_area.map(&mut self.page_table);
@@ -286,6 +324,9 @@ impl MapArea {
             map_type,
             map_perm,
         }
+    }
+    pub fn mapped(& self,vpn:VirtPageNum) -> bool {
+        self.data_frames.contains_key(&vpn)
     }
     pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         let ppn: PhysPageNum;

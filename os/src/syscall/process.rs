@@ -1,5 +1,5 @@
 //! Process management syscalls
-use crate::{mm::{translated_addressr, translated_addressw}, task::{change_program_brk, current_user_token, exit_current_and_run_next, get_syscall_trace, suspend_current_and_run_next}, timer::get_time_us};
+use crate::{mm::{translated_addressr, translated_addressw, MapPermission, VirtAddr}, task::{change_program_brk, current_user_token, exit_current_and_run_next, get_syscall_trace, mmap,munmap, suspend_current_and_run_next}, timer::get_time_us};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -76,15 +76,32 @@ pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
 
 // YOUR JOB: Implement mmap.
 pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    trace!("kernel: sys_mmap NOT IMPLEMENTED YET!");
-    -1
+    trace!("kernel: sys_map {:#x} {:#x} {:#x}",_start,_len,_port);
+    if _start & 0xfff != 0 || _port & !0x7 != 0 || _port & 0x7 == 0{
+        return -1;
+    }
+    let start_va = VirtAddr::from(_start);
+    let end_va = VirtAddr::from(_start+_len);
+    let mut map_permission = MapPermission::U;
+    if _port & 0x1 != 0 {map_permission = map_permission|MapPermission::R;}
+    if _port & 0x2 != 0 {map_permission = map_permission|MapPermission::W;}
+    if _port & 0x4 != 0 {map_permission = map_permission|MapPermission::X;}
+    let result = mmap(start_va, end_va, map_permission);
+    result
 }
 
 // YOUR JOB: Implement munmap.
 pub fn sys_munmap(_start: usize, _len: usize) -> isize {
-    trace!("kernel: sys_munmap NOT IMPLEMENTED YET!");
-    -1
+    trace!("kernel: sys_munmap {:#x} {:#x}",_start,_len);
+    if _start & 0xfff != 0{
+        return -1;
+    }
+    let start_va = VirtAddr::from(_start);
+    let end_va = VirtAddr::from(_start+_len);
+    let result = munmap(start_va, end_va);
+    result
 }
+
 /// change data segment size
 pub fn sys_sbrk(size: i32) -> isize {
     trace!("kernel: sys_sbrk");

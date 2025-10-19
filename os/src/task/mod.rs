@@ -15,6 +15,7 @@ mod switch;
 mod task;
 
 use crate::loader::{get_app_data, get_num_app};
+use crate::mm::{MapPermission, VirtAddr};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
@@ -163,6 +164,16 @@ impl TaskManager {
         let current = inner.current_task;
         inner.tasks[current].trace[id]+=1;
     }
+    fn mmap(&self,start_va:VirtAddr,end_va:VirtAddr,permission:MapPermission)->isize{
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].memory_set.mmap(start_va, end_va, permission)
+    }
+    fn munmap(&self,start_va:VirtAddr,end_va:VirtAddr)->isize{
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].memory_set.munmap(start_va, end_va)
+    }
 }
 
 /// Run the first task in task list.
@@ -243,4 +254,14 @@ pub fn count_syscall_trace(id:usize){
        _ => panic!("Unsupported syscall_id: {}",id)
     };
     TASK_MANAGER.count_syscall_trace(index);
+}
+
+/// map memory
+pub fn mmap(start_va:VirtAddr,end_va:VirtAddr,permission:MapPermission) -> isize{
+    TASK_MANAGER.mmap(start_va, end_va, permission)
+}
+
+/// unmap memory
+pub fn munmap(start_va:VirtAddr,end_va:VirtAddr) -> isize{
+    TASK_MANAGER.munmap(start_va, end_va)
 }
