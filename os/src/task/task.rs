@@ -68,6 +68,12 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+
+    /// Program Stride
+    pub stride: usize,
+
+    /// Program Priority
+    pub priority: usize,
 }
 
 impl TaskControlBlockInner {
@@ -118,6 +124,8 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    stride: 0,
+                    priority: 16
                 })
             },
         };
@@ -168,6 +176,7 @@ impl TaskControlBlock {
             self.kernel_stack.get_top(),
             trap_handler as usize,
         );
+        inner.stride = 0;
         // **** release inner automatically
     }
 
@@ -200,6 +209,8 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    stride: parent_inner.stride,
+                    priority: parent_inner.priority
                 })
             },
         });
@@ -220,6 +231,10 @@ impl TaskControlBlock {
         let task_control_block = Arc::new(TaskControlBlock::new(elf_data));
         parent_inner.children.push(task_control_block.clone());
         task_control_block
+    }
+    /// set priority
+    pub fn set_priority(&self,priority:usize){
+        self.inner_exclusive_access().priority = priority;
     }
     /// get pid of process
     pub fn getpid(&self) -> usize {
