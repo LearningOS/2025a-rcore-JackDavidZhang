@@ -3,7 +3,7 @@ use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
 use crate::config::TRAP_CONTEXT_BASE;
 use crate::fs::{File, Stdin, Stdout};
-use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
+use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE,MapPermission};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
@@ -71,6 +71,12 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+
+    /// Program Stride
+    pub stride: usize,
+
+    /// Program Priority
+    pub priority: usize,
 }
 
 impl TaskControlBlockInner {
@@ -135,6 +141,8 @@ impl TaskControlBlock {
                     ],
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    stride: 0,
+                    priority: 16
                 })
             },
         };
@@ -149,7 +157,16 @@ impl TaskControlBlock {
         );
         task_control_block
     }
-
+    /// Map memory for task
+    pub fn mmap(&self,start_va:VirtAddr,end_va:VirtAddr,permission:MapPermission)->isize{
+        let mut inner = self.inner.exclusive_access();
+        inner.memory_set.mmap(start_va, end_va, permission)
+    }
+    /// Unmap memory for task
+    pub fn munmap(&self,start_va:VirtAddr,end_va:VirtAddr)->isize{
+        let mut inner = self.inner.exclusive_access();
+        inner.memory_set.munmap(start_va, end_va)
+    }
     /// Load a new elf to replace the original application address space and start execution
     pub fn exec(&self, elf_data: &[u8]) {
         // memory_set with elf program headers/trampoline/trap context/user stack
@@ -175,6 +192,8 @@ impl TaskControlBlock {
         );
         *inner.get_trap_cx() = trap_cx;
         // **** release current PCB
+        inner.stride = 0;
+        // **** release inner automatically
     }
 
     /// parent process fork the child process
@@ -216,6 +235,8 @@ impl TaskControlBlock {
                     fd_table: new_fd_table,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    stride: parent_inner.stride,
+                    priority: parent_inner.priority
                 })
             },
         });
@@ -230,7 +251,17 @@ impl TaskControlBlock {
         // **** release child PCB
         // ---- release parent PCB
     }
-
+    /// parent process run new child process
+    pub fn spawn(self: &Arc<Self>, elf_data: &[u8]) -> Arc<Self> {
+        let mut parent_inner = self.inner_exclusive_access();
+        let task_control_block = Arc::new(TaskControlBlock::new(elf_data));
+        parent_inner.children.push(task_control_block.clone());
+        task_control_block
+    }
+    /// set priority
+    pub fn set_priority(&self,priority:usize){
+        self.inner_exclusive_access().priority = priority;
+    }
     /// get pid of process
     pub fn getpid(&self) -> usize {
         self.pid.0
