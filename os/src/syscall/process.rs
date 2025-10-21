@@ -3,11 +3,12 @@ use alloc::sync::Arc;
 
 use crate::{
     loader::get_app_data_by_name,
-    mm::{translated_refmut, translated_str,VirtAddr,MapPermission},
+    mm::{translated_refmut, translated_str,translated_addressw,VirtAddr,MapPermission},
     task::{
         add_task, current_task, current_user_token, exit_current_and_run_next,
         suspend_current_and_run_next,
     },
+    timer::get_time_us
 };
 
 #[repr(C)]
@@ -106,16 +107,24 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TimeVal`] is splitted by two pages ?
 pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_get_time NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
+    trace!("kernel:pid[{}] sys_get_time", current_task().unwrap().pid.0);
+    let pa = match translated_addressw(current_user_token(),_ts as usize){
+        Some(pa) => pa,
+        None => return -1
+    } as *mut TimeVal;
+    let us = get_time_us();
+    unsafe {
+        *pa = TimeVal {
+            sec: us / 1_000_000,
+            usec: us % 1_000_000,
+        };
+    }
+    0
 }
 
 /// YOUR JOB: Implement mmap.
 pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    debug!("kernel: pid[{}] sys_map {:#x} {:#x} {:#x}",current_task().unwrap().pid.0,_start,_len,_port);
+    trace!("kernel: pid[{}] sys_map {:#x} {:#x} {:#x}",current_task().unwrap().pid.0,_start,_len,_port);
     if _start & 0xfff != 0 || _port & !0x7 != 0 || _port & 0x7 == 0{
         return -1;
     }
@@ -130,7 +139,7 @@ pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
 
 /// YOUR JOB: Implement munmap.
 pub fn sys_munmap(_start: usize, _len: usize) -> isize {
-    debug!("kernel: pid[{}] sys_munmap {:#x} {:#x}",current_task().unwrap().pid.0,_start,_len);
+    trace!("kernel: pid[{}] sys_munmap {:#x} {:#x}",current_task().unwrap().pid.0,_start,_len);
     if _start & 0xfff != 0{
         return -1;
     }
