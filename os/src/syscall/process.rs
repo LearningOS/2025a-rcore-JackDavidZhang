@@ -3,7 +3,7 @@ use alloc::sync::Arc;
 
 use crate::{
     loader::get_app_data_by_name,
-    mm::{translated_refmut, translated_str},
+    mm::{translated_refmut, translated_str,VirtAddr,MapPermission},
     task::{
         add_task, current_task, current_user_token, exit_current_and_run_next,
         suspend_current_and_run_next,
@@ -115,20 +115,28 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 
 /// YOUR JOB: Implement mmap.
 pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_mmap NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
+    debug!("kernel: pid[{}] sys_map {:#x} {:#x} {:#x}",current_task().unwrap().pid.0,_start,_len,_port);
+    if _start & 0xfff != 0 || _port & !0x7 != 0 || _port & 0x7 == 0{
+        return -1;
+    }
+    let start_va = VirtAddr::from(_start);
+    let end_va = VirtAddr::from(_start+_len);
+    let mut map_permission = MapPermission::U;
+    if _port & 0x1 != 0 {map_permission = map_permission|MapPermission::R;}
+    if _port & 0x2 != 0 {map_permission = map_permission|MapPermission::W;}
+    if _port & 0x4 != 0 {map_permission = map_permission|MapPermission::X;}
+    current_task().unwrap().mmap(start_va, end_va, map_permission)
 }
 
 /// YOUR JOB: Implement munmap.
 pub fn sys_munmap(_start: usize, _len: usize) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_munmap NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
+    debug!("kernel: pid[{}] sys_munmap {:#x} {:#x}",current_task().unwrap().pid.0,_start,_len);
+    if _start & 0xfff != 0{
+        return -1;
+    }
+    let start_va = VirtAddr::from(_start);
+    let end_va = VirtAddr::from(_start+_len);
+    current_task().unwrap().munmap(start_va, end_va)
 }
 
 /// change data segment size

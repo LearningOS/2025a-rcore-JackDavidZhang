@@ -2,7 +2,7 @@
 use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
 use crate::config::TRAP_CONTEXT_BASE;
-use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
+use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE,MapPermission};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
@@ -132,7 +132,16 @@ impl TaskControlBlock {
         );
         task_control_block
     }
-
+    /// Map memory for task
+    pub fn mmap(&self,start_va:VirtAddr,end_va:VirtAddr,permission:MapPermission)->isize{
+        let mut inner = self.inner.exclusive_access();
+        inner.memory_set.mmap(start_va, end_va, permission)
+    }
+    /// Unmap memory for task
+    pub fn munmap(&self,start_va:VirtAddr,end_va:VirtAddr)->isize{
+        let mut inner = self.inner.exclusive_access();
+        inner.memory_set.munmap(start_va, end_va)
+    }
     /// Load a new elf to replace the original application address space and start execution
     pub fn exec(&self, elf_data: &[u8]) {
         // memory_set with elf program headers/trampoline/trap context/user stack
